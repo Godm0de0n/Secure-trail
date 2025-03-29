@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Team 281 - SecureTrail</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Import Mapbox GL JS -->
+  <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v2.8.1/mapbox-gl.js"></script>
+  <link href="https://api.tiles.mapbox.com/mapbox-gl-js/v2.8.1/mapbox-gl.css" rel="stylesheet" />
+
+  <!-- Import Mapbox GL Directions -->
+  <script
+    src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-directions/v4.0.2/mapbox-gl-directions.js"></script>
+  <link rel="stylesheet"
+    href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-directions/v4.0.2/mapbox-gl-directions.css"
+    type="text/css" />
+
+  <script
+    src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
+  <link rel="stylesheet"
+    href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css" type="text/css">
+
+
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.8.1/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.8.1/mapbox-gl.js"></script>
+
+  <!-- Import Turf & Polyline -->
+  <script src="https://npmcdn.com/@turf/turf/turf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mapbox-polyline/1.1.1/polyline.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Open Sans', sans-serif;
+    }
+
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+    }
+
+    .btn:link,
+.btn:visited {
+    text-transform: uppercase;
+    text-decoration: none;
+    padding: 15px 40px;
+    display: inline-block;
+    border-radius: 100px;
+    transition: all .2s;
+    position: absolute;
+}
+
+.btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.btn:active {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
+}
+
+.btn-white {
+    background-color: rgb(248, 105, 105);
+    color: #777;
+}
+
+.btn::after {
+    content: "";
+    display: inline-block;
+    height: 100%;
+    width: 100%;
+    border-radius: 100px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: -1;
+    transition: all .4s;
+}
+
+.btn-white::after {
+    background-color: #fff;
+}
+
+.btn:hover::after {
+    transform: scaleX(1.4) scaleY(1.6);
+    opacity: 0;
+}
+
+.btn-animated {
+    animation: moveInBottom 5s ease-out;
+    animation-fill-mode: backwards;
+}
+
+@keyframes moveInBottom {
+    0% {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0px);
+    }
+}
+
+    .sidebar {
+      position: absolute;
+      margin: 20px 20px 30px 20px;
+      width: 25%;
+      top: 0;
+      bottom: 0;
+      padding: 20px;
+      background-color: #fff;
+      overflow-y: scroll;
+    }
+
+    .card {
+      font-size: small;
+      border-bottom: solid #d3d3d3 2px;
+      margin-bottom: 6px;
+    }
+
+    .card-header {
+      font-weight: bold;
+      padding: 6px;
+    }
+
+    .no-route {
+      background-color: #d3d3d3;
+      color: #f00;
+    }
+
+    .obstacle-found {
+      background-color: #d3d3d3;
+      color: #fff;
+    }
+
+    .route-found {
+      background-color: #33a532;
+      color: #fff;
+    }
+
+    .card-details {
+      padding: 3px 6px;
+    }
+
+    #geocoder-container>div {
+      min-width: 100%;
+      margin-left: 75%;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="map"></div>
+  <div class="sidebar">
+  
+    <h1>Reports</h1>
+    <div id="reports"></div>
+    <a href="http://localhost:3000/" class="btn btn-white btn-animate">Home</a>
+    
+  </div>
+
+  <script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoiemFwMTAwMSIsImEiOiJjbDJhbzR4cngwM2JyM2NwN25sdW80NWNsIn0.ekbhe_aKhQLUL-nmF-6vTA';
+    let map = new mapboxgl.Map({
+      container: 'map', // Specify the container ID
+      style: 'mapbox://styles/mapbox/light-v10', // Specify which map style to use
+      center: [77.0844,23.2032], // Specify the starting position [lng, lat]
+      zoom: 13 // Specify the starting zoom
+    });
+
+
+    let directions = new MapboxDirections({
+      accessToken: mapboxgl.accessToken,
+      unit: 'metric',
+      profile: 'mapbox/driving',
+      alternatives: true,
+      geometries: 'geojson',
+      controls: { instructions: true },
+      flyTo: false,
+
+    });
+
+    // let geocoder = new MapboxGeocoder({
+    //   accessToken: mapboxgl.accessToken,
+    //   marker: {
+    //     color: 'orange'
+    //   },
+    //   mapboxgl: mapboxgl
+    // });
+
+    // map.addControl(geocoder);
+
+    map.addControl(directions, 'top-right');
+
+
+
+    map.scrollZoom.enable();
+
+    let negatives = {
+  'type': 'FeatureCollection',
+  'features': [
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.2973, 23.2112]
+      },
+      'properties': {
+        'clearance': "14' 7"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.0948, 23.2428]
+      },
+      'properties': {
+        'clearance': "14' 2"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.2252, 23.2392]
+      },
+      'properties': {
+        'clearance': "2' 9"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.1059, 23.2225]
+      },
+      'properties': {
+        'clearance': "8' 5"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.2454, 23.2192]
+      },
+      'properties': {
+        'clearance': "4' 11"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.1014, 23.2311]
+      },
+      'properties': {
+        'clearance': "5' 4"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.2129, 23.2175]
+      },
+      'properties': {
+        'clearance': "16' 2"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.2612, 23.207]
+      },
+      'properties': {
+        'clearance': "19' 6"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.3797, 23.2188]
+      },
+      'properties': {
+        'clearance': "20' 0"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.2683, 23.2229]
+      },
+      'properties': {
+        'clearance': "1' 0"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.3305, 23.2224]
+      },
+      'properties': {
+        'clearance': "2' 8"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.1304, 23.2527]
+      },
+      'properties': {
+        'clearance': "7' 4"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.1883, 23.2411]
+      },
+      'properties': {
+        'clearance': "3' 5"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.2435, 23.2336]
+      },
+      'properties': {
+        'clearance': "10' 2"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.2384, 23.2599]
+      },
+      'properties': {
+        'clearance': "21' 5"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.1996, 23.2239]
+      },
+      'properties': {
+        'clearance': "2' 6"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.2411, 23.2535]
+      },
+      'properties': {
+        'clearance': "9' 0"
+      }
+    }
+  ]
+};
+
+
+let positives = {
+  'type': 'FeatureCollection',
+  'features': [
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.0521, 23.2535]
+      },
+      'properties': {
+        'clearance': "19' 2"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.0605, 23.2022]
+      },
+      'properties': {
+        'clearance': "2' 3"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.0431, 23.2242]
+      },
+      'properties': {
+        'clearance': "8' 2"
+      }
+    }
+  ]
+};
+
+let positive2 = {
+  'type': 'FeatureCollection',
+  'features': [
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.0623, 23.2345]
+      },
+      'properties': {
+        'clearance': "12' 2"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.0325, 23.2521]
+      },
+      'properties': {
+        'clearance': "20' 2"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.0544, 23.2153]
+      },
+      'properties': {
+        'clearance': "8' 7"
+      }
+    }
+  ]
+};
+
+let workingLight = {
+  'type': 'FeatureCollection',
+  'features': [
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.0225, 23.2434]
+      },
+      'properties': {
+        'clearance': "12' 2"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.0411, 23.2245]
+      },
+      'properties': {
+        'clearance': "20' 2"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.0635, 23.2532]
+      },
+      'properties': {
+        'clearance': "11' 3"
+      }
+    }
+  ]
+};
+
+let nonWorkingLight = {
+  'type': 'FeatureCollection',
+  'features': [
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.0544, 23.2245]
+      },
+      'properties': {
+        'clearance': "12' 2"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.0452, 23.2113]
+      },
+      'properties': {
+        'clearance': "8' 7"
+      }
+    },
+    {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [77.0343, 23.2145]
+      },
+      'properties': {
+        'clearance': "11' 2"
+      }
+    }
+  ]
+};
+
+
+    let obstacle = turf.buffer(negatives, 0.10, { units: 'kilometers' });
+    let hospitals = turf.buffer(positives, 0.05, { units: 'kilometers' });
+    let policeStations = turf.buffer(positive2, 0.10, { units: 'kilometers' });
+    let goodLights = turf.buffer(workingLight, 0.10, { units: 'kilometers' });
+    let badLights = turf.buffer(nonWorkingLight, 0.07, { units: 'kilometers' });
+    console.log(obstacle);
+
+    let bbox = [0, 0, 0, 0];
+    let polygon = turf.bboxPolygon(bbox);
+
+    //Non-MapBox Navigator
+    navigator.geolocation.getCurrentPosition(successLocation, errorLocation, {
+            enableHighAccuracy: true
+        })
+
+        function successLocation(position) {
+            console.log(position);
+
+            const marker = new mapboxgl.Marker()
+            .setLngLat([position.coords.longitude, position.coords.latitude])
+            .addTo(map);
+
+            //setupMap([position.coords.longitude, position.coords.latitude]);
+        }
+
+        function errorLocation(position) {
+            setupMap([81.83402, 25.43807]);
+            console.log("Sorry.")
+        }
+
+    map.on('load', () => {
+      map.addLayer({
+        id: 'negatives',
+        type: 'fill',
+        source: {
+          type: 'geojson',
+          data: obstacle
+        },
+        layout: {},
+        paint: {
+          'fill-color': '#f03b20',
+          'fill-opacity': 0.5,
+          'fill-outline-color': '#f03b20'
+        }
+      });
+
+      map.addLayer({
+        id: 'positives',
+        type: 'fill',
+        source: {
+          type: 'geojson',
+          data: hospitals
+        },
+        layout: {},
+        paint: {
+          'fill-color': '#00ff00',
+          'fill-opacity': 0.5,
+          'fill-outline-color': '#00ff00'
+        }
+      });
+
+
+      map.addLayer({
+        id: 'positive2',
+        type: 'fill',
+        source: {
+          type: 'geojson',
+          data: policeStations
+        },
+        layout: {},
+        paint: {
+          'fill-color': '#00ff25',
+          'fill-opacity': 0.85,
+          'fill-outline-color': '#00ff25'
+        }
+      });
+
+      map.addLayer({
+        id: 'workingLight',
+        type: 'fill',
+        source: {
+          type: 'geojson',
+          data: goodLights
+        },
+        layout: {},
+        paint: {
+          'fill-color': '#ffff00',
+          'fill-opacity': 0.60,
+          'fill-outline-color': '#ffff00'
+        }
+      });
+
+      map.addLayer({
+        id: 'nonWorkingLight',
+        type: 'fill',
+        source: {
+          type: 'geojson',
+          data: badLights
+        },
+        layout: {},
+        paint: {
+          'fill-color': '#696969',
+          'fill-opacity': 0.50,
+          'fill-outline-color': '#696969'
+        }
+      });
+
+      map.addSource('theRoute', {
+        type: 'geojson',
+        data: {
+          type: 'Feature'
+        }
+      });
+
+
+
+      map.addLayer({
+        id: 'theRoute',
+        type: 'line',
+        source: 'theRoute',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': '#cccccc',
+          'line-opacity': 0.5,
+          'line-width': 13,
+          'line-blur': 0.5
+        }
+      });
+
+      // Source and layer for the bounding box
+      map.addSource('theBox', {
+        type: 'geojson',
+        data: {
+          type: 'Feature'
+        }
+      });
+      map.addLayer({
+        id: 'theBox',
+        type: 'fill',
+        source: 'theBox',
+        layout: {},
+        paint: {
+          'fill-color': '#FFC300',
+          'fill-opacity': 0.5,
+          'fill-outline-color': '#FFC300'
+        }
+      });
+    });
+
+    let counter = 0;
+    let maxAttempts = 20;
+    let emoji = '';
+    let collision = '';
+    let detail = '';
+    let reports = document.getElementById('reports');
+
+    function addCard(id, element, clear, detail) {
+      let card = document.createElement('div');
+      card.className = 'card';
+      // Add the response to the individual report created above
+      let heading = document.createElement('div');
+      // Set the class type based on clear value
+      heading.className =
+        clear === true
+          ? 'card-header route-found'
+          : 'card-header obstacle-found';
+      heading.innerHTML =
+        id === 0
+          ? `${emoji} The route ${collision}`
+          : `${emoji} Route ${id} ${collision}`;
+
+      let details = document.createElement('div');
+      details.className = 'card-details';
+      details.innerHTML = `This ${detail} obstacles.`;
+
+      card.appendChild(heading);
+      card.appendChild(details);
+      element.insertBefore(card, element.firstChild);
+    }
+
+    function noRoutes(element) {
+      let card = document.createElement('div');
+      card.className = 'card';
+      // Add the response to the individual report created above
+      let heading = document.createElement('div');
+      heading.className = 'card-header no-route';
+      emoji = '🛑';
+      heading.innerHTML = `${emoji} Ending search.`;
+
+      // Add details to the individual report
+      let details = document.createElement('div');
+      details.className = 'card-details';
+      details.innerHTML = `No clear route found in ${counter} tries.`;
+
+      card.appendChild(heading);
+      card.appendChild(details);
+      element.insertBefore(card, element.firstChild);
+    }
+
+    directions.on('clear', () => {
+      map.setLayoutProperty('theRoute', 'visibility', 'none');
+      map.setLayoutProperty('theBox', 'visibility', 'none');
+
+      // counter = 0;
+      reports.innerHTML = '';
+    });
+
+    let durationcheck = 10000000000;
+    let storelocation;
+    let weightedvalorg = -1;
+    let weightedval=0;
+    let x;
+    let numcnt = 0;
+
+    directions.on('route', (event) => {
+      // Hide the route and box by setting the opacity to zero
+      map.setLayoutProperty('theRoute', 'visibility', 'none');
+      map.setLayoutProperty('theBox', 'visibility', 'none');
+
+      
+      if (counter >= maxAttempts) {
+        noRoutes(reports);
+      } else {
+        // Make each route visible
+        console.log('event routing', event.route)
+        for (let route of event.route) {
+          console.log('routing', route)
+          // Make each route visible
+          map.setLayoutProperty('theRoute', 'visibility', 'visible');
+          map.setLayoutProperty('theBox', 'visibility', 'visible');
+
+          // Get GeoJSON LineString feature of route
+          let routeLine = polyline.toGeoJSON(route.geometry);
+
+          // Create a bounding box around this route
+          // The app will find a random point in the new bbox
+          bbox = turf.bbox(routeLine);
+          polygon = turf.bboxPolygon(bbox);
+
+          // Update the data for the route
+          // This will update the route line on the map
+          map.getSource('theRoute').setData(routeLine);
+          // console.log(map.getSource('theRoute').setData(routeLine))
+          // Update the box
+          map.getSource('theBox').setData(polygon);
+
+          let clear = turf.booleanDisjoint(obstacle, routeLine);
+          let safe = turf.booleanIntersects(hospitals, routeLine);
+          let safer = turf.booleanIntersects(policeStations, routeLine);
+          let lights = turf.booleanIntersects(goodLights, routeLine);
+          let nolights = turf.booleanDisjoint(badLights, routeLine);
+
+          weightedval = (safe ? 2 : 0) + (safer ? 5 : 0) + (lights ? 5 : 0);
+          let res1 = safe && safer && lights;
+          let res2 = safe || safer || lights || nolights;
+
+          let check = false;
+          if(res1 == true){
+            check = true;
+          }
+          if(res2 == true){
+            check = true;
+          }
+          if(res1 == true && res2 == true){
+            check = true;
+          }
+
+          if(check){
+            weightedval = weightedval+10;
+          }
+
+
+          console.log(clear)
+          console.log(safe)
+          console.log(safer)
+          console.log(weightedval)
+
+          if (clear == true && nolights == true && weightedval >= weightedvalorg) {
+            collision = 'does not intersect any obstacles!';
+            detail = `takes ${(route.duration / 60).toFixed(
+              0
+            )} minutes and avoids`;
+            emoji = '✔️';
+            x = route.duration;
+            if (x < durationcheck) {
+              durationcheck = route.duration;
+              storelocation = map.getSource('theRoute').setData(routeLine);
+
+            }
+            map.setPaintProperty('theRoute', 'line-color', '#74c476');
+            // Hide the box+
+            map.setLayoutProperty('theBox', 'visibility', 'none');
+            // Reset the counter
+            counter = counter - 1;
+            weightedvalorg = weightedval
+            console.log(weightedvalorg);
+            numcnt++;
+            addCard(counter, reports, clear, detail);
+            if(numcnt>2){
+              break;
+            }
+          } else {
+            // Collision occurred, so increment the counter
+            counter = counter - 1;
+            // As the attempts increase, expand the search area
+            // by a factor of the attempt count
+            polygon = turf.transformScale(polygon, counter * 0.01);
+            bbox = turf.bbox(polygon);
+            collision = 'is bad.';
+            detail = `takes ${(route.duration / 60).toFixed(
+              0
+            )} minutes and hits`;
+            emoji = '⚠️';
+            map.setPaintProperty('theRoute', 'line-color', '#de2d26');
+
+            // Add a randomly selected waypoint to get a new route from the Directions API
+            let randomWaypoint = turf.randomPoint(1, { bbox: bbox });
+            directions.setWaypoint(
+              0,
+              randomWaypoint['features'][0].geometry.coordinates
+            );
+            numcnt++;
+            addCard(counter, reports, clear, detail);
+          }
+          console.log(durationcheck);
+          console.log(storelocation);
+
+          // durationcheck.sort((c1, c2) => {
+          //   return compareObjects(c1, c2, 'name')
+          // })
+          // Add a new report section to the sidebar
+          addCard(counter, reports, clear, detail);
+        }
+      }
+      storelocation;
+    });
+  </script>
+</body>
+
+</html>
+
+<!-- <!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Display a map on a webpage</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.8.1/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.8.1/mapbox-gl.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <script>
+        // TO MAKE THE MAP APPEAR YOU MUST
+        // ADD YOUR ACCESS TOKEN FROM
+        // https://account.mapbox.com
+        mapboxgl.accessToken = 'pk.eyJ1IjoiemFwMTAwMSIsImEiOiJjbDJhbzR4cngwM2JyM2NwN25sdW80NWNsIn0.ekbhe_aKhQLUL-nmF-6vTA';
+
+        const map = new mapboxgl.Map({
+            container: 'map', // container ID
+            style: 'mapbox://styles/mapbox/streets-v11', // style URL
+            center: [81.8627, 25.4934], // starting position [lng, lat]
+            zoom: 9 // starting zoom
+        });
+
+        //map.addControl(new mapboxgl.NavigationControl());
+
+        //Non-MapBox Navigator
+        navigator.geolocation.getCurrentPosition(successLocation, errorLocation, {
+            enableHighAccuracy: true
+        })
+
+        function successLocation(position) {
+            console.log(position);
+
+            const marker = new mapboxgl.Marker()
+            .setLngLat([position.coords.longitude, position.coords.latitude])
+            .addTo(map);
+        }
+
+        function errorLocation(position) {
+            console.log("Sorry.")
+        }
+
+        // Create a new marker.
+        //const marker = new mapboxgl.Marker()
+          //  .setLngLat([81.8627, 25.4934])
+          //  .addTo(map);
+
+            /*
+        //location finding from here
+        map.addControl(
+            new mapboxgl.GeolocateControl({
+                positionOptions: {
+                    enableHighAccuracy: true
+                },
+                // When active the map will receive updates to the device's location as it changes.
+                trackUserLocation: true,
+                // Draw an arrow next to the location dot to indicate which direction the device is heading.
+                //showUserHeading: true
+            })
+        );
+
+        function successLocation(position) {
+            console.log(position);
+        }
+
+        function errorLocation(position) {
+            console.log("Sorry.")
+        } */
+
+    </script>
+
+</body>
+
+</html> -->
